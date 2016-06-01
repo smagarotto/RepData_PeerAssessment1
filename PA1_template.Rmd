@@ -1,0 +1,146 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+# Reproducible Research: Peer assessment 1
+
+## Loading and preprocessing the data
+
+```{r, echo=FALSE}
+## numbers >= 10^5 will be in scientific notation and rounded to 2 digits
+options(scipen = 1, digits = 2)
+```
+
+```{r results="hide"}
+unzip("activity.zip")
+dati <- read.csv("activity.csv",sep=",")
+
+dati$date   <- as.Date(dati$date)
+dati$hour   <- dati$interval %/% 100
+dati$minute <- dati$interval %%  100
+dati$DateTime <- strptime(paste(dati$date, dati$hour, dati$minute), format="%Y-%m-%d %H %M")
+```
+
+
+```{r}
+summary(dati)
+```
+
+## What is mean total number of steps taken per day?
+
+First we calculate the total number of steps taken per day
+
+```{r}
+stepsaggr <- tapply(dati$steps, dati$date, sum, na.rm=TRUE)
+```
+
+We create the histogram of the total number of steps taken each day.
+
+```{r fig.width=8, fig.height=7}
+colors = c("red", "yellow", "green", "blue", "orange") 
+hist(stepsaggr, main="Distribution of steps / day", col=colors, xlab="Steps")
+```
+
+Finally we calculate and report the mean and median of the total number of steps taken per day.
+
+```{r}
+sommario <- summary(stepsaggr)
+```
+
+Steps / day:
+* mean: `r sommario[["Mean"]]`
+* median: `r sommario[["Median"]]`
+
+## What is the average daily activity pattern?
+
+Time series plot of the 5-minute interval (x) and the average number of steps taken, averaged across all days (y).
+
+```{r}
+mediaintervalli <- tapply(dati$steps, dati$interval, mean, na.rm = TRUE)
+disponibile <- require(lattice)
+if (disponibile == FALSE) 
+     {
+      install.packages("lattice")
+      library(lattice)
+     }
+xyplot(mediaintervalli ~ sort(unique(unclass(dati$interval))), type = "l", col = "red", xlab = "Interval", ylab = "Steps", main="Average daily activity pattern")
+```
+
+Determine the 5-minute interval with the highest average total steps.
+
+```{r}
+maxIntervallo <- mediaintervalli[abs(mediaintervalli - max(mediaintervalli)) < 1]
+```
+
+The interval with the maximum average number of steps is `r names(maxIntervallo)`.
+
+## Imputing missing values
+
+Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs).
+
+```{r}
+mancanti <-length((dati$steps[which(is.na(dati$steps)==TRUE)]))
+```
+
+The total number of missing values is `r mancanti`.
+
+Strategy for filling in all of the missing values in the dataset: replaced missing values with the mean number of steps for each 5-minute interval. 
+
+```{r}
+intervalloMedia <-as.data.frame(tapply(dati$steps,dati$interval,mean,na.rm=TRUE))
+names(intervalloMedia)<-c("steps")
+```
+
+New dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r}
+dati[is.na(dati)] = intervalloMedia$steps
+dati$steps<-round(dati$steps,0)
+summary(dati)
+```
+
+Histogram of the total number of steps taken each day and mean and median total number of steps taken per day. 
+
+```{r fig.width=8, fig.height=7}
+colors = c("red", "yellow", "green", "blue", "orange") 
+hist(tapply(dati$steps, dati$date,sum,na.rm=FALSE), col=colors,
+     main="Distribution of steps taken each day",
+     xlab="Steps")
+meanNA<-mean(tapply(na.omit(dati$steps),dati$date,sum,na.rm=FALSE))
+medianNA<-median(tapply(na.omit(dati$steps),dati$date,sum,na.rm=FALSE))
+```
+
+These values are higher than the estimates from the first part of the assignment. After changing the NA with the interval mean now the new mean is `r meanNA` and the new median is `r medianNA`.
+Also the histogram is roughly the same.
+
+# Are there differences in activity patterns between weekdays and weekends?
+
+We use the dataset with the filled-in missing values.
+We create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+Finally we make a panel plot containing a time series plot of the 5-minute interval (x) and the average number of steps taken, averaged across all weekday days or weekend days (y). 
+
+```{r}
+Sys.setlocale("LC_TIME", "English")
+dati$date<-as.Date(dati$date)
+dati$weekday<-weekdays(dati$date)
+dati$weekday[dati$weekday=="Monday" | 
+                 dati$weekday=="Tuesday" | 
+                 dati$weekday=="Wednesday" | 
+                 dati$weekday=="Thursday" | 
+                 dati$weekday=="Friday" ]<-"weekday"
+dati$weekday[dati$weekday=="Saturday" | dati$weekday=="Sunday"]<-"weekend"
+dati$weekday<-factor(dati$weekday)
+intAvgWeekday<-aggregate(steps ~ interval + weekday, data = dati, FUN= "mean" )
+
+xyplot(intAvgWeekday$steps~intAvgWeekday$interval | intAvgWeekday$weekday, 
+       type="l",
+       layout=c(1,2),
+       xlab="Interval", 
+       ylab="Steps")
+```
+
+
+We can see that during the weekend people walks a little more than during weekdays.
